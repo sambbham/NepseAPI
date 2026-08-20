@@ -1,5 +1,4 @@
 import asyncio
-import websockets
 from nepse import AsyncNepse
 import json
 import logging
@@ -254,13 +253,3 @@ async def ws_listener(websocket, path=None):
         logger.error(f"WebSocket Error: {e}")
     finally:
         await websocket.close()
-
-# Start WebSocket server on all interfaces
-async def start_ws_server():
-    server = await websockets.serve(ws_listener, "0.0.0.0", 5555)
-    print("WebSocket server started on ws://0.0.0.0:5555")
-    await server.wait_closed()
-
-# Running the WebSocket server
-if __name__ == "__main__":
-    asyncio.run(start_ws_server())
