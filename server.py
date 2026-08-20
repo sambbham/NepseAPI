@@ -12,6 +12,9 @@ from rate_limiter import check_rate_limit, get_rate_limit_headers, rate_limiter
 
 app = FastAPI()
 
+@app.websocket("/ws")
+async def websocket_endpoint(...)
+
 # Rate limiting middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
