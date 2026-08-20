@@ -3,7 +3,11 @@ from fastapi.responses import JSONResponse
 from nepse import AsyncNepse
 import logging
 import time
+from fastapi import WebSocket, WebSocketDisconnect
+import json
 
+from socketServer import handle_route
+from rate_limiter import check_rate_limit
 # Import validation utilities
 from validator import validate_stock_symbol, validate_index_name, validator
 
@@ -13,7 +17,72 @@ from rate_limiter import check_rate_limit, get_rate_limit_headers, rate_limiter
 app = FastAPI()
 
 @app.websocket("/ws")
-async def websocket_endpoint(...)
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+
+    client_ip = websocket.client.host if websocket.client else "unknown"
+
+    try:
+        while True:
+            message = await websocket.receive_text()
+
+            try:
+                allowed, info = check_rate_limit(
+                    client_ip,
+                    "websocket_message"
+                )
+
+                if not allowed:
+                    await websocket.send_text(json.dumps({
+                        "error": "Rate limit exceeded for messages",
+                        "limit": info["limit"],
+                        "remaining": info["remaining"],
+                        "reset_time": info["reset_time"]
+                    }))
+                    continue
+
+                request = json.loads(message)
+
+                route = request.get("route")
+                params = request.get("params", {})
+                message_id = request.get("messageId")
+
+                response_data = await handle_route(route, params)
+
+                response = {
+                    "messageId": message_id,
+                    "data": response_data,
+                    "rate_limit": {
+                        "remaining": info["remaining"],
+                        "limit": info["limit"],
+                        "reset_time": info["reset_time"]
+                    }
+                }
+
+                await websocket.send_text(json.dumps(response))
+
+            except json.JSONDecodeError:
+                await websocket.send_text(
+                    json.dumps({"error": "Invalid JSON"})
+                )
+
+            except Exception as route_error:
+                await websocket.send_text(json.dumps({
+                    "messageId": message_id if "message_id" in locals() else None,
+                    "error": str(route_error)
+                }))
+
+    except WebSocketDisconnect:
+        pass
+
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 # Rate limiting middleware
 @app.middleware("http")
